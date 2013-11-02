@@ -6,27 +6,43 @@
  * Comment: layout of tree is the lexicographically greatest
  * distance sequence L(T, z) = [l1, l2, ..., ln], where
  * li is a distance from the i-th vertex to root 'z' */
-template <unsigned int labelsCount>
 class tree_layout
 {
 protected:
-  unsigned int labels[labelsCount];   // Array of vertices labels (distance to root)
+  unsigned int *labels;   // Array of vertices labels (distance to root)
+  unsigned int labelsCount;
 public:
   /* Default class constructor */
-  tree_layout( void )
+  tree_layout( unsigned int verticesCount ) : labelsCount(verticesCount), labels(NULL)
   {
-    /* Fill labels like in lined-tree *-*-*-...-*-* (this is a start-tree in algorithm) */
-    for (unsigned int i = 0; i <= labelsCount / 2; i++)
-      labels[i] = i;
-    for (unsigned int i = labelsCount / 2 + 1; i < labelsCount; i++)
-      labels[i] = i - labelsCount / 2;
+    if (labelsCount > 0)
+    {
+      labels = new unsigned int[labelsCount];
+      if (labels == NULL)
+        return;
+      /* Fill labels like in lined-tree *-*-*-...-*-* (this is a start-tree in algorithm) */
+      for (unsigned int i = 0; i <= labelsCount / 2; i++)
+        labels[i] = i;
+      for (unsigned int i = labelsCount / 2 + 1; i < labelsCount; i++)
+        labels[i] = i - labelsCount / 2;
+    }
   }
 
-  /* Copying class constructor */
-  tree_layout( tree_layout &layout )
+  tree_layout( tree_layout &layout ) : labelsCount(layout.labelsCount)
   {
+    labels = new unsigned int[labelsCount];
+    if (labels == NULL)
+      return;
+    /* Fill labels like in lined-tree *-*-*-...-*-* (this is a start-tree in algorithm) */
     for (unsigned int i = 0; i < labelsCount; i++)
       labels[i] = layout.labels[i];
+  }
+
+  ~tree_layout( void )
+  {
+    if (labels)
+      delete[] labels;
+    labelsCount = 0;
   }
 
   /* Allow to get and set 'index'-th label from layout function */
@@ -44,45 +60,85 @@ public:
   /* Search a maximum vertex label in 'labels' array function */
   unsigned int max( void )
   {
-    unsigned int maxLabel = labels[1];
+    if (labelsCount > 1)
+    {
+      unsigned int maxLabel = labels[1];
 
-    for (unsigned int i = 2; i < labelsCount; i++)
-      if (labels[i] > maxLabel)
-        maxLabel = labels[i];
-    return maxLabel;
-  }
-
-  /* Returns count of vertices in tree operator (allow to compare labels from trees with different vertices count) */
-  operator unsigned int( void )
-  {
-    return labelsCount;
+      for (unsigned int i = 2; i < labelsCount; i++)
+        if (labels[i] > maxLabel)
+          maxLabel = labels[i];
+      return maxLabel;
+    }
+    else
+      return 1;
   }
 
   /* Assignment new layout operator */
   tree_layout & operator=( tree_layout &layout )
   {
-    for (int i = 0; i < labelsCount; i++)
-      labels[i] = layout.labels[i];
+    if (layout.size() == labelsCount)
+      for (unsigned int i = 0; i < labelsCount; i++)
+        labels[i] = layout.labels[i];
     return *this;
+  }
+
+  /* Check tree for n-path rooted case function */
+  bool isSimple( void )
+  {
+    for (unsigned int i = 1; i < labelsCount; i++)
+      if (labels[i] != 1)
+        return false;
+    return true;
   }
 };
 
+/* Compare two layouts with equal vertices count operator (compare lexicographically) */
+bool operator<=( tree_layout &layout1, tree_layout &layout2 )
+{
+  if (layout1.size() > layout2.size())
+    return false;
+  else if (layout1.size() < layout2.size())
+    return true;
+  else
+    for (unsigned int i = 0; i < layout1.size(); i++)
+    {
+      if (layout1[i] < layout2[i])
+        return true;
+      else if (layout1[i] > layout2[i])
+        return false;
+    }
+  return true;
+}
+
+/* Check non-equal operator */
+bool operator!=( tree_layout &layout1, tree_layout &layout2 )
+{
+  if (layout1.size() != layout2.size())
+    return true;
+  else
+  {
+    for (unsigned int i = 2; i < layout1.size(); i++)
+      if (layout1[i] != layout2[i])
+        return true;
+  }
+  return false;
+}
+
 /* Generator new layout helpful class */
-template <unsigned int labelsCount>
 class tree_generator
 {
 public:
   /* Construct new layout from some layout function.
    * (input) p - index of label for start */
-  static tree_layout<labelsCount> successor( tree_layout<labelsCount> &layout, unsigned int p = 0 )
+  static tree_layout successor( tree_layout &layout, unsigned int p = 0 )
   {
     unsigned int q;
-    tree_layout<labelsCount> newLayout = layout;
+    tree_layout newLayout(layout);
 
     if (p == 0)
     {
       /* Search maximum index of label, which isn't equal with 1 */
-      for (p = labelsCount - 1; layout[p] == 1; p--)
+      for (p = layout.size() - 1; layout[p] == 1; p--)
         ;
       if (p == 0)
         return newLayout;
@@ -92,59 +148,50 @@ public:
     for (q = p - 1; layout[q] != layout[p] - 1; q--)
       ;
 
-    /* Copy a first part of 'layout' to successor */
-    newLayout[0] = 0;
-    newLayout[1] = 1;
-    for (unsigned int i = 2; i < p; i++)
-      newLayout[i] = layout[i];
     /* Copy a part of successor to the end of successor */
-    for (unsigned int i = p; i < labelsCount; i++)
+    for (unsigned int i = p; i < layout.size(); i++)
       newLayout[i] = newLayout[i - p + q];
     return newLayout;
   }
 
-  static tree_layout<labelsCount> buildLayout( tree_layout<labelsCount> &layout )
+  static tree_layout buildLayout( tree_layout &layout )
   {
-    tree_layout<labelsCount> newLayout;
+    tree_layout newLayout(successor(layout));
     unsigned int m;
 
-    newLayout = successor(layout);
-
-    for (m = 2; m < labelsCount; m++)
+    for (m = 2; m < newLayout.size(); m++)
       if (newLayout[m] == 1)
         break;
-    tree_layout<labelsCount> l1;
-    tree_layout<labelsCount> l2;
+    if (m <= 1)
+      return newLayout;
+    tree_layout l1(m - 1);
+    tree_layout l2(newLayout.size() - m + 1);
 
-    for (unsigned int i = 0; i < m - 1; i++)
+    for (unsigned int i = 0; i < l1.size(); i++)
       l1[i] = newLayout[i + 1] - 1;
-    for (unsigned int i = m - 1; i < labelsCount; i++)
-      l1[i] = 0;
 
     l2[0] = 0;
-    for (unsigned int i = 1; i < labelsCount - m + 1; i++)
+    for (unsigned int i = 1; i < l2.size(); i++)
       l2[i] = newLayout[i + m - 1];
-    for (unsigned int i = labelsCount - m + 1; i < labelsCount; i++)
-      l2[i] = 0;
 
-    if (m != labelsCount && l2.max() >= l1.max())
+    if (m != newLayout.size())
     {
       if (l2.max() > l1.max())
         return newLayout;
-      else if ((m - 1) <= (labelsCount - m + 1))   // case with (l2.max == l1.max)
+      else if (l2.max() == l1.max())
       {
-        if ((m - 1) < (labelsCount - m + 1))
-          return newLayout;
-        else if (l1 <= l2)
+        if (l1 <= l2)
           return newLayout;
       }
     }
+
     newLayout = successor(newLayout, m - 1);
 
     if (l1[m - 2] > 1)
     {
       unsigned int height = 0, max = newLayout[1];
-      for (unsigned int i = 2; i < labelsCount; i++)
+      for (unsigned int i = 2; i < newLayout.size(); i++)
+      {
         if (newLayout[i] <= max)
           break;
         else
@@ -152,29 +199,10 @@ public:
           max = newLayout[i];
           height++;
         }
-      for (unsigned int i = labelsCount - 1; i >= labelsCount - height - 1; i--)
-        newLayout[i] = i - labelsCount + 2 + height;
+      }
+      for (unsigned int i = newLayout.size() - 1; i >= newLayout.size() - height - 1; i--)
+        newLayout[i] = i - newLayout.size() + 2 + height;
     }
     return newLayout;
   }
 };
-
-/* Compare two layouts with equal vertices count operator (compare lexicographically) */
-template <unsigned int labelsCount>
-bool operator<=( tree_layout<labelsCount> &layout1, tree_layout<labelsCount> &layout2 )
-{
-  for (unsigned int i = 2; i < labelsCount; i++)
-    if (layout1[i] > layout2[i])
-      return false;
-  return true;
-}
-
-/* Check non-equal operator */
-template <unsigned int labelsCount>
-bool operator!=( tree_layout<labelsCount> &layout1, tree_layout<labelsCount> &layout2 )
-{
-  for (unsigned int i = 2; i < labelsCount; i++)
-    if (layout1[i] != layout2[i])
-      return true;
-  return false;
-}
